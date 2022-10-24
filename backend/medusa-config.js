@@ -5,10 +5,7 @@ const ADMIN_CORS = process.env.ADMIN_CORS || "http://localhost:7001";
 const STORE_CORS = process.env.STORE_CORS || "http://localhost:8000";
 
 // Database URL (here we use a local database called medusa-development)
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  "postgres://postgres:Medusa@localhost/medusa-printful";
-
+const DATABASE_URL = process.env.DATABASE_URL;
 // Medusa uses Redis, so this needs configuration as well
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 

@@ -4,6 +4,10 @@ import { Validator } from "medusa-core-utils";
 import { projectConfig } from "../../medusa-config";
 import bodyParser from "body-parser";
 
+import { Components } from "../typed-printful-client/generated-types";
+
+export type Webhook = Components.Schemas.Webhook & { data: any };
+
 export default () => {
   const router = Router();
 
@@ -58,10 +62,9 @@ export default () => {
     "/printful/hook",
     cors(corsOptions),
     bodyParser.json(),
-    async (req, res) => {
-      console.log("Data: ", req.body);
 
-      const schema = Validator.object().keys({
+    (req, res) => {
+      const schema = Validator.object<Webhook>().keys({
         type: Validator.string(),
         created: Validator.number(),
         retries: Validator.number(),
@@ -72,12 +75,13 @@ export default () => {
       const { value, error } = schema.validate(req.body);
 
       if (error) {
+        console.error("printful-plugin:: problem parsing webhook payload");
         throw error;
       }
 
-      const eventBus = req.scope.resolve("eventBusService");
+      const eventBus: any = req.scope.resolve("eventBusService");
 
-      eventBus.emit("printful.product_updated", value);
+      eventBus.emit("printful.webhook", value);
 
       res.sendStatus(200);
     }

@@ -1,12 +1,39 @@
 import _ from "lodash";
 import { FulfillmentService } from "medusa-interfaces";
-import { PrintfulClient } from "printful-request";
+import { PrintfulClient } from "better-printful-request";
 
-const backendUrl = process.env.BACKEND_URL || "https://printful.ngrok.io";
+import type {
+  Client as PrintfulClient2,
+  Components,
+} from "../typed-printful-client";
+import printfulClient from "../typed-printful-client/printful-client";
+
+import chalk from "chalk";
+
+import type {
+  OrderService,
+  Product,
+  ProductService,
+  ProductVariantService,
+  ShippingProfileService,
+} from "@medusajs/medusa";
+import { EntityManager } from "typeorm";
+import invariant from "tiny-invariant";
+import { CreateProductInput } from "@medusajs/medusa/dist/types/product";
+import { CreateProductVariantInput } from "@medusajs/medusa/dist/types/product-variant";
+
 const printfulApiKey = process.env.PRINTFUL_API_KEY || "";
 
 class PrintfulFullfilmentService extends FulfillmentService {
   static identifier = "printful";
+
+  private productService_: ProductService;
+  private productVariantService_: ProductVariantService;
+  private orderService_: OrderService;
+  private shippingProfileService_: ShippingProfileService;
+
+  private printfulClient_: PrintfulClient;
+  private typedPrintfulClient: PrintfulClient2;
 
   constructor({
     manager,
@@ -14,16 +41,17 @@ class PrintfulFullfilmentService extends FulfillmentService {
     orderService,
     productVariantService,
     shippingProfileService,
-  }) {
+  }: any) {
     super();
 
     this.productService_ = productService;
-    this.orderService_ = orderService;
     this.productVariantService_ = productVariantService;
+    this.orderService_ = orderService;
     this.manager_ = manager;
     this.shippingProfileService_ = shippingProfileService;
 
     this.printfulClient_ = new PrintfulClient(printfulApiKey);
+    this.typedPrintfulClient = printfulClient();
   }
 
   getFulfillmentOptions() {
@@ -63,6 +91,25 @@ class PrintfulFullfilmentService extends FulfillmentService {
   }
 
   async createWebhooks() {
+    console.log(chalk.yellow("printful-plugin::setting up webhooks..."));
+
+    const backendUrl = process.env.BACKEND_URL;
+    const medusaWebhookUrl = `${backendUrl}/printful/hook`;
+
+    console.log(
+      chalk.yellow(
+        `printful-plugin::webhook url configured to ${medusaWebhookUrl}`
+      )
+    );
+
+    if (!backendUrl) {
+      console.log(
+        chalk.red(
+          "printful-plugin::backend must be configured for this plugin to work"
+        )
+      );
+    }
+
     const types = [
       "product_updated",
       "order_canceled",
@@ -71,54 +118,77 @@ class PrintfulFullfilmentService extends FulfillmentService {
       "package_shipped",
     ];
 
-    const currentConfig = await this.printfulClient_
-      .get("webhooks")
-      .then(({ result }) => result);
+    // const currentConfig = await this.typedPrintfulClient
+    //   .getWebhooks()
+    //   .then((resp) => resp.data.result);
 
-    // if webhooks are already configured, return early
-    if (currentConfig.types === types) {
-      return;
-    }
-
-    const url = `${backendUrl}/printful/hook`;
+    // when the configs match we dont need to re-run update request to printful
+    // if (
+    //   currentConfig?.url === mesdusaWebhookUrl &&
+    //   _.isEqual(currentConfig?.types, types)
+    // ) {
+    //   console.log(chalk.yellow(`printful-plugin::Webhooks are already setup `));
+    //   return;
+    // }
 
     try {
-      return await this.printfulClient_.post("webhooks", { types, url });
+      await this.typedPrintfulClient.createWebhook(null, {
+        url: medusaWebhookUrl,
+        types,
+      });
     } catch (error) {
-      console.log(error);
+      console.log(
+        chalk.red("printful-plugin::Problem updating printful webhook"),
+        error
+      );
     }
   }
 
-  addVariantOptions_(variant, productOptions) {
+  addVariantOptions_(variant: any, productOptions: Product["options"]) {
     const options = productOptions.map((o, i) => ({
       option_id: o.id,
       ...variant.options[i],
     }));
+
     variant.options = options;
 
     return variant;
   }
 
-  async upsertProductInMedusa(data) {
-    return this.atomicPhase_(async (manager) => {
+  async test() {
+    console.log("HELLO FROM TEST");
+  }
+
+  async upsertProduct(data: {
+    sync_product: Components.Schemas.SyncProductEvent;
+  }) {
+    const work = async (transactionManager: EntityManager) => {
       const exists = await this.productService_
-        .withTransaction(manager)
-        .list({ handle: _.kebabCase(data.name) });
+        .withTransaction(transactionManager)
+        .list({ handle: String(data.sync_product.id) });
 
       // if the product already exist, we update
       if (exists?.length) {
         // TODO: call update
+        console.log("TODO: Run update...");
         return;
       }
-
-      const { sync_product, sync_variants } = await this.printfulClient_
-        .get(`store/products/${data.sync_product.id}`)
-        .then(({ result }) => result);
 
       let shippingProfile =
         await this.shippingProfileService_.retrieveDefault();
 
-      const productData = {
+      invariant(shippingProfile, "no default shipping profile available");
+      const syncProductInfo = await this.typedPrintfulClient
+        .getStoreSyncProductById({
+          id: data.sync_product.id || 0,
+        })
+        .then((resp) => resp.data.result);
+
+      invariant(syncProductInfo, "no sync product info");
+      const { sync_product, sync_variants } = syncProductInfo;
+
+      invariant(sync_product);
+      const productData: CreateProductInput = {
         title: sync_product.name,
         handle: _.kebabCase(sync_product.name),
         thumbnail: sync_product.thumbnail_url,
@@ -128,7 +198,12 @@ class PrintfulFullfilmentService extends FulfillmentService {
           printful_id: sync_product.id,
         },
       };
+      const product = await this.productService_.create(productData);
 
+      invariant(
+        sync_variants,
+        `${product.handle} must have at least one variant`
+      );
       const variantsData = sync_variants.map((v) => {
         const varOption = `${v.variant_id}`;
 
@@ -146,31 +221,41 @@ class PrintfulFullfilmentService extends FulfillmentService {
           prices: [
             {
               currency_code: v.currency,
-              amount: parseInt(v.retail_price, 10) * 100,
+              amount: v.retail_price ? parseInt(v.retail_price, 10) * 100 : 0,
             },
           ],
           metadata: {
+            // TODO bring in more meta data
             printful_id: v.id,
+            printful_sync_product_id: v.sync_product_id,
           },
         };
       });
 
-      const product = await this.productService_
-        .withTransaction(manager)
-        .create(productData);
-
-      let variants = variantsData;
-
-      variants = variants.map((v) =>
+      const variantInput: CreateProductVariantInput[] = variantsData.map((v) =>
         this.addVariantOptions_(v, product.options)
       );
 
-      for (const variant of variants) {
+      for (const variant of variantInput) {
         await this.productVariantService_
-          .withTransaction(manager)
+          .withTransaction(transactionManager)
           .create(product.id, variant);
       }
-    });
+
+      console.log(
+        chalk.green(
+          `✔ ${product.handle} was added along with ${sync_variants.length} variant(s)`
+        )
+      );
+    };
+
+    return this.atomicPhase_(
+      work,
+      (e: any) =>
+        console.error("upsertProductInMedusa:isolationOrErrorHandler", e),
+      (e: any) =>
+        console.error("upsertProductInMedusa:maybeErrorHandlerOrDontFail", e)
+    );
   }
 
   async createFulfillment(methodData, fulfillmentItems, order, fulfillment) {
