@@ -1,11 +1,15 @@
 import PrintfulFulfillmentService from "services/printful-fulfillment";
 import chalk from "chalk";
 import { Webhook } from "../api";
+import { MedusaContainer } from "@medusajs/medusa/dist/types/global";
 
-class PrintfulSubscriber {
+class PrintfulWebhookSubscriber {
   printfulFulfillmentService_: PrintfulFulfillmentService;
 
-  constructor({ printfulFulfillmentService, eventBusService }: any) {
+  constructor({
+    printfulFulfillmentService,
+    eventBusService,
+  }: MedusaContainer["cradle"]) {
     this.printfulFulfillmentService_ = printfulFulfillmentService;
 
     eventBusService.subscribe("printful.webhook", this.handleWebhookEvent);
@@ -28,4 +32,4 @@ class PrintfulSubscriber {
   };
 }
 
-export default PrintfulSubscriber;
+export default PrintfulWebhookSubscriber;

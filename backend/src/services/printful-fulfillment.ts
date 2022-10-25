@@ -24,7 +24,7 @@ import { CreateProductVariantInput } from "@medusajs/medusa/dist/types/product-v
 
 const printfulApiKey = process.env.PRINTFUL_API_KEY || "";
 
-class PrintfulFullfilmentService extends FulfillmentService {
+class PrintfulFulfillmentService extends FulfillmentService {
   static identifier = "printful";
 
   private productService_: ProductService;
@@ -292,6 +292,8 @@ class PrintfulFullfilmentService extends FulfillmentService {
   }
 
   async createShipment(data) {
+    return console.log("create shipment is broken..");
+
     const { shipment, order } = data;
 
     const orderId = order.order.external_id;
@@ -317,4 +319,4 @@ class PrintfulFullfilmentService extends FulfillmentService {
   }
 }
 
-export default PrintfulFullfilmentService;
+export default PrintfulFulfillmentService;
