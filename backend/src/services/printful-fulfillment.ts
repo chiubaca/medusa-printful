@@ -159,19 +159,25 @@ class PrintfulFulfillmentService extends FulfillmentService {
     console.log("HELLO FROM TEST");
   }
 
-  async upsertProduct(data: {
+  /**
+   * Handler for the "product_updated" Printful webhook.
+   *
+   * This when an existing product has been updated and when a new items is added.
+   */
+  async handleProductUpdated(data: {
     sync_product: Components.Schemas.SyncProductEvent;
   }) {
     const work = async (transactionManager: EntityManager) => {
-      const exists = await this.productService_
-        .withTransaction(transactionManager)
-        .list({ handle: String(data.sync_product.id) });
+      const exists =
+        data.sync_product.id &&
+        (await this.productService_
+          .withTransaction(transactionManager)
+          .list({ external_id: String(data.sync_product.id) }));
 
-      // if the product already exist, we update
-      if (exists?.length) {
-        // TODO: call update
-        console.log("TODO: Run update...");
-        return;
+      // If the item already exist, delete first it. This is far simpler than trying to reconcile the differences.
+      if (exists && exists.length > 0) {
+        console.log("deleting existing item...");
+        await this.productService_.delete(exists[0].id);
       }
 
       let shippingProfile =
@@ -194,10 +200,12 @@ class PrintfulFulfillmentService extends FulfillmentService {
         thumbnail: sync_product.thumbnail_url,
         options: [{ title: "Printful variant" }],
         profile_id: shippingProfile.id,
+        external_id: String(sync_product.id),
         metadata: {
           printful_id: sync_product.id,
         },
       };
+
       const product = await this.productService_.create(productData);
 
       invariant(

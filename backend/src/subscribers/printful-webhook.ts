@@ -18,7 +18,9 @@ class PrintfulWebhookSubscriber {
   handleWebhookEvent = async (payload: Webhook) => {
     switch (payload.type) {
       case "product_updated": {
-        await this.printfulFulfillmentService_.upsertProduct(payload.data);
+        await this.printfulFulfillmentService_.handleProductUpdated(
+          payload.data
+        );
         break;
       }
       case "package_shipped": {
