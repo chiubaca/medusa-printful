@@ -4,7 +4,7 @@ TODO
 
 - [x] Setup webhooks
 - [x] Sync new products when they're added
-- [ ] Sync products when they're updated
+- [x] Sync products when they're updated
 - [ ] Sync products when they're deleted
 - [ ] Sync shipping rates
 - [ ] API endpoint to seed entire store
