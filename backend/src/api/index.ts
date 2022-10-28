@@ -1,10 +1,14 @@
 import { Router } from "express";
+import authenticate from "@medusajs/medusa/dist/api/middlewares/authenticate-customer";
 import cors from "cors";
 import { Validator } from "medusa-core-utils";
 import { projectConfig } from "../../medusa-config";
 import bodyParser from "body-parser";
 
 import { Components } from "../typed-printful-client/generated-types";
+import { UserService } from "@medusajs/medusa";
+import invariant from "tiny-invariant";
+import PrintfulFulfillmentService from "services/printful-fulfillment";
 
 export type Webhook = Components.Schemas.Webhook & { data: any };
 
@@ -80,10 +84,45 @@ export default () => {
       }
 
       const eventBus: any = req.scope.resolve("eventBusService");
-
       eventBus.emit("printful.webhook", value);
 
       res.sendStatus(200);
+    }
+  );
+
+  router.options("/admin/printful/seed-store");
+  router.post(
+    "/admin/printful/seed-store",
+    cors(corsOptions),
+    authenticate(),
+    async (req, res) => {
+      // console.log("🚀 ~ file: index.ts ~ line 92 ~ router.post ~ res", res);
+      const user = req.user;
+
+      if (!user) {
+        return res.json({
+          message: "no API token was provided",
+        });
+      }
+
+      const userService: UserService = req.scope.resolve("userService");
+      const userDetails = await userService.retrieve(user.id);
+
+      if (userDetails.email !== process.env.SUPER_ADMIN) {
+        return res.json({
+          message: "Only a super admin can perform this action",
+        });
+      }
+
+      const printfulService: PrintfulFulfillmentService = req.scope.resolve(
+        "printfulFulfillmentService"
+      );
+
+      const resp = await printfulService.seedStoreFromPrintful();
+
+      res.json({
+        message: resp,
+      });
     }
   );
 
