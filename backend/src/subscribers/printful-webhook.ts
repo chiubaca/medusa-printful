@@ -3,6 +3,11 @@ import chalk from "chalk";
 import { Webhook } from "../api";
 import { MedusaContainer } from "@medusajs/medusa/dist/types/global";
 
+import {
+  ProductDeletedWebhookDataSchema,
+  ProductUpdatedWebhookDataSchema,
+} from "../schemas";
+
 class PrintfulWebhookSubscriber {
   printfulFulfillmentService_: PrintfulFulfillmentService;
 
@@ -16,10 +21,27 @@ class PrintfulWebhookSubscriber {
   }
 
   handleWebhookEvent = async (payload: Webhook) => {
+    console.log(`Webhook received: ${payload.type}`);
+
     switch (payload.type) {
       case "product_updated": {
-        await this.printfulFulfillmentService_.handleProductUpdated(
+        const productUpdatedWebhookData = ProductUpdatedWebhookDataSchema.parse(
           payload.data
+        );
+
+        await this.printfulFulfillmentService_.handleProductUpdated(
+          productUpdatedWebhookData.sync_product
+        );
+        break;
+      }
+      // TODO: investigate why deletion webhook on printful is not getting fired
+      case "product_deleted": {
+        const productDeletedWebhookData = ProductDeletedWebhookDataSchema.parse(
+          payload.data
+        );
+
+        await this.printfulFulfillmentService_.handleProductDeleted(
+          productDeletedWebhookData.sync_product
         );
         break;
       }

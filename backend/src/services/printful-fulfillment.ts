@@ -2,10 +2,7 @@ import _ from "lodash";
 import { FulfillmentService } from "medusa-interfaces";
 import { PrintfulClient } from "better-printful-request";
 
-import type {
-  Client as PrintfulClient2,
-  Components,
-} from "../typed-printful-client";
+import type { Client as PrintfulClient2 } from "../typed-printful-client";
 import printfulClient from "../typed-printful-client/printful-client";
 
 import chalk from "chalk";
@@ -21,6 +18,10 @@ import { EntityManager } from "typeorm";
 import invariant from "tiny-invariant";
 import { CreateProductInput } from "@medusajs/medusa/dist/types/product";
 import { CreateProductVariantInput } from "@medusajs/medusa/dist/types/product-variant";
+import type {
+  ProductDeletedWebhookData,
+  ProductUpdatedWebhookData,
+} from "../schemas";
 
 const printfulApiKey = process.env.PRINTFUL_API_KEY || "";
 
@@ -192,6 +193,30 @@ class PrintfulFulfillmentService extends FulfillmentService {
     return "store has been seeded from Printful successfully";
   }
 
+  async handleProductDeleted(
+    syncProduct: ProductDeletedWebhookData["sync_product"]
+  ) {
+    const work = async () => {
+      const medusaProduct = await this.productService_
+        .withTransaction(this.manager_)
+        .retrieveByExternalId(String(syncProduct.id));
+
+      await this.productService_
+        .withTransaction(this.manager_)
+        .delete(medusaProduct.id);
+
+      console.log(` ${medusaProduct.id}:${medusaProduct.handle} was deleted`);
+    };
+
+    return this.atomicPhase_(
+      work,
+      (e: any) =>
+        console.error("handleProductDeleted:isolationOrErrorHandler", e),
+      (e: any) =>
+        console.error("handleProductDeleted:maybeErrorHandlerOrDontFail", e)
+    );
+  }
+
   async upsertPrintfulProductAndVariantsById(printfulProductId: string) {
     let shippingProfile = await this.shippingProfileService_.retrieveDefault();
 
@@ -277,15 +302,13 @@ class PrintfulFulfillmentService extends FulfillmentService {
    * Handler for the "product_updated" Printful webhook.
    * This when an existing product has been updated and when a new items is added.
    */
-  async handleProductUpdated(data: {
-    sync_product: Components.Schemas.SyncProductEvent;
-  }) {
+  async handleProductUpdated(
+    syncProduct: ProductUpdatedWebhookData["sync_product"]
+  ) {
     const work = async () => {
-      const exists =
-        data.sync_product.id &&
-        (await this.productService_
-          .withTransaction(this.manager_)
-          .list({ external_id: String(data.sync_product.id) }));
+      const exists = await this.productService_
+        .withTransaction(this.manager_)
+        .list({ external_id: String(syncProduct.id) });
 
       // If the item already exist, delete first it. This is far simpler than trying to reconcile the differences.
       if (exists && exists.length > 0) {
@@ -293,8 +316,7 @@ class PrintfulFulfillmentService extends FulfillmentService {
         await this.productService_.delete(exists[0].id);
       }
 
-      invariant(data.sync_product?.id, "No product id available");
-      this.upsertPrintfulProductAndVariantsById(String(data.sync_product.id));
+      this.upsertPrintfulProductAndVariantsById(String(syncProduct.id));
     };
 
     return this.atomicPhase_(
