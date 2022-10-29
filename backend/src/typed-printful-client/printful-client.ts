@@ -1,5 +1,5 @@
 import OpenAPIClientAxios, { Document } from "openapi-client-axios";
-import { Client } from "../generated/generatedTypes";
+import { Client } from "./generated-types";
 import { definition } from "./printful-openapi";
 
 import chalk from "chalk";
@@ -11,7 +11,6 @@ if (!PRINTFUL_API_KEY) {
 }
 
 const printfulClient = () => {
-  console.log(chalk.green("\n ✔ Printful API token present"));
   return new OpenAPIClientAxios({
     definition: definition as unknown as Document,
     quick: true,
