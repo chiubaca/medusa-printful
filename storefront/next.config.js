@@ -6,6 +6,7 @@ module.exports = withStoreConfig({
   reactStrictMode: true,
   images: {
     domains: [
+      "printful.s3-accelerate.amazonaws.com",
       "files.cdn.printful.com",
       "medusa-public-images.s3.eu-west-1.amazonaws.com",
       "localhost",
