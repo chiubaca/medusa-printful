@@ -7,10 +7,11 @@ import printfulClient from "../typed-printful-client/printful-client";
 
 import chalk from "chalk";
 
-import type {
+import {
   OrderService,
   Product,
   ProductService,
+  ProductStatus,
   ProductVariantService,
   ShippingProfileService,
 } from "@medusajs/medusa";
@@ -239,7 +240,7 @@ class PrintfulFulfillmentService extends FulfillmentService {
       options: [{ title: "Printful variant" }],
       profile_id: shippingProfile.id,
       external_id: String(printfulProductId), //TODO type will fixed in upcoming update
-      // status: TODO - pull this state from printful
+      status: ProductStatus.PUBLISHED,
       metadata: {
         printful_id: sync_product.id,
       },
