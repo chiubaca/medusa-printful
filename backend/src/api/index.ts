@@ -7,7 +7,6 @@ import bodyParser from "body-parser";
 
 import { Components } from "../typed-printful-client/generated-types";
 import { UserService } from "@medusajs/medusa";
-import invariant from "tiny-invariant";
 import PrintfulFulfillmentService from "services/printful-fulfillment";
 
 export type Webhook = Components.Schemas.Webhook & { data: any };
@@ -125,6 +124,10 @@ export default () => {
       });
     }
   );
+
+  router.get("/", (req, res) => {
+    res.send("<h1>Hello Medusa</h1>");
+  });
 
   return router;
 };
