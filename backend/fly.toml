@@ -1,16 +1,12 @@
-# fly.toml file generated for medusa-backend on 2022-11-05T15:47:41Z
+# fly.toml file generated for medusa-server on 2022-11-05T17:02:18Z
 
-app = "medusa-backend"
+app = "medusa-server"
 kill_signal = "SIGINT"
 kill_timeout = 5
 processes = []
 
 [env]
-  BACKEND_URL = "https://7386-5-64-109-68.ngrok.io"
-  COOKIE_SECRET = "something"
-  DATABASE_URL = "postgres://postgres:92c0b3c34f910e234a6050c779d969005aac66e382e4fe5c@medusa-backend-db.internal"
-  JWT_SECRET = "something"
-  REDIS_URL = "redis://default:00119e59c2fd44fdbaae60a0fbb1cf02@fly-medusa-redis.upstash.io"
+
 
 [experimental]
   allowed_public_ports = []
@@ -18,7 +14,7 @@ processes = []
 
 [[services]]
   http_checks = []
-  internal_port = 8080
+  internal_port = 9000
   processes = ["app"]
   protocol = "tcp"
   script_checks = []
